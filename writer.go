@@ -57,7 +57,7 @@ func (w *Writer) Write(b []byte) (int, error) {
 			return 0, w.err
 		}
 	default:
-		if w.err = wr.WriteByte(byte(size)); w.err != nil {
+		if w.err = wr.WriteByte(byte(127)); w.err != nil {
 			return 0, w.err
 		}
 		if w.err = binary.Write(wr, binary.BigEndian, uint64(size)); w.err != nil {
