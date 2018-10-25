@@ -13,15 +13,15 @@ import (
 var guid = []byte("258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
 
 func Handshake(w http.ResponseWriter, r *http.Request) (net.Conn, error) {
-	swsk, err := secKey(r)
+	key, err := secKey(r)
 	if err != nil {
 		status := http.StatusBadRequest
 		http.Error(w, http.StatusText(status), status)
 		return nil, err
 	}
-	// Generate SHA-1 hash and encode it using base64.
+	// Generate SHA-1 hash and encode it using Base64.
 	sha := sha1.New()
-	sha.Write(append(swsk, guid...))
+	sha.Write(append(key, guid...))
 	hd := w.Header()
 	hd.Set("Upgrade", "websocket")
 	hd.Set("Connection", "Upgrade")
