@@ -61,5 +61,5 @@ func secKey(r *http.Request) (string, error) {
 	if key == "" {
 		return "", errors.New("websocket: missing Sec-WebSocket-Key header")
 	}
-	return key, nil // same as strings.(*Builder).String method
+	return key, nil
 }
