@@ -1,4 +1,4 @@
-# wsocket (WebSocket implementation for Go)
+# websocket (WebSocket implementation for Go)
 
 ## About
 This is an easy-to-use WebSocket server implementation in [Go](https://golang.org).
@@ -7,7 +7,7 @@ It passes [Autobahn Test Suite](https://crossbar.io/autobahn/testsuite/).
 ## Examples
 ### Simple usage inside HTTP handler
 ```go
-ws, err := wsocket.UpgradeHTTP(w, r)
+ws, err := websocket.UpgradeHTTP(w, r)
 if err != nil {
 	// ...
 }
