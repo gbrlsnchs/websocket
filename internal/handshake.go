@@ -66,9 +66,6 @@ func Handshake(w http.ResponseWriter, r *http.Request) (net.Conn, error) {
 }
 
 func ConcatKey(key string) ([]byte, error) {
-	if len(key) != 16 {
-		return nil, ErrInvalidSecWebSocketKey
-	}
 	// Generate SHA-1 hash and encode it using Base64.
 	sha := sha1.New()
 	b := make([]byte, len(key)+len(guid))
