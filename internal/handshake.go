@@ -83,7 +83,7 @@ func Validate(hdr http.Header) error {
 		return ErrUpgradeMismatch
 	case strings.ToLower(hdr.Get("Connection")) != ConnectionHeader:
 		return ErrConnectionMismatch
-	case hdr.Get("Sec-WebSocket-Version") == SecWebSocketVersionHeader:
+	case hdr.Get("Sec-WebSocket-Version") != SecWebSocketVersionHeader:
 		return ErrSecWebSocketVersionMissing
 	}
 	return nil
