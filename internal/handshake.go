@@ -9,26 +9,45 @@ import (
 	"strings"
 )
 
-const guid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+const (
+	UpgradeHeader             = "websocket"
+	ConnectionHeader          = "upgrade"
+	SecWebSocketVersionHeader = "13"
+	guid                      = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+)
+
+var (
+	ErrMissingHost                = errors.New("websocket: missing Host header")
+	ErrUpgradeMismatch            = errors.New("websocket: Upgrade header mismatch")
+	ErrConnectionMismatch         = errors.New("websocket: Connection header mismatch")
+	ErrSecWebSocketVersionMissing = errors.New("websocket: missing Sec-WebSocket-Version header")
+	ErrInvalidSecWebSocketKey     = errors.New("websocket: invalid Sec-WebSocket-Key")
+)
 
 func Handshake(w http.ResponseWriter, r *http.Request) (net.Conn, error) {
-	key, err := secKey(r)
+	if r.Host == "" {
+		status := http.StatusBadRequest
+		http.Error(w, http.StatusText(status), status)
+		return nil, ErrMissingHost
+	}
+
+	var err error
+	if err = Validate(r.Header); err != nil {
+		status := http.StatusBadRequest
+		http.Error(w, http.StatusText(status), status)
+		return nil, err
+	}
+
+	hdr := w.Header()
+	hdr.Set("Upgrade", "websocket")
+	hdr.Set("Connection", "Upgrade")
+	key, err := ConcatKey(r.Header.Get("Sec-WebSocket-Key"))
 	if err != nil {
 		status := http.StatusBadRequest
 		http.Error(w, http.StatusText(status), status)
 		return nil, err
 	}
-	// Generate SHA-1 hash and encode it using Base64.
-	sha := sha1.New()
-	b := make([]byte, len(key)+len(guid))
-	copy(b, key)
-	copy(b, guid)
-	sha.Write(b)
-
-	hd := w.Header()
-	hd.Set("Upgrade", "websocket")
-	hd.Set("Connection", "Upgrade")
-	hd.Set("Sec-WebSocket-Accept", base64.StdEncoding.EncodeToString(sha.Sum(nil)))
+	hdr.Set("Sec-WebSocket-Accept", base64.StdEncoding.EncodeToString(key))
 	w.WriteHeader(http.StatusSwitchingProtocols)
 
 	// Hijack the underlying connection.
@@ -43,23 +62,29 @@ func Handshake(w http.ResponseWriter, r *http.Request) (net.Conn, error) {
 		}
 		return conn, nil
 	}
-	return nil, errors.New("websocket/internal: connection not hijackable")
+	return nil, errors.New("websocket: connection not hijackable")
 }
 
-func secKey(r *http.Request) (string, error) {
+func ConcatKey(key string) ([]byte, error) {
+	if len(key) != 16 {
+		return nil, ErrInvalidSecWebSocketKey
+	}
+	// Generate SHA-1 hash and encode it using Base64.
+	sha := sha1.New()
+	b := make([]byte, len(key)+len(guid))
+	copy(b[copy(b, key):], guid)
+	sha.Write(b)
+	return sha.Sum(nil), nil
+}
+
+func Validate(hdr http.Header) error {
 	switch {
-	case r.Host == "":
-		return "", errors.New("websocket: missing Host header")
-	case strings.ToLower(r.Header.Get("Upgrade")) != "websocket":
-		return "", errors.New("websocket: Upgrade header mismatch")
-	case strings.ToLower(r.Header.Get("Connection")) != "upgrade":
-		return "", errors.New("websocket: Connection header mismatch")
-	case r.Header.Get("Sec-WebSocket-Version") == "":
-		return "", errors.New("websocket: missing Sec-WebSocket-Version header")
+	case strings.ToLower(hdr.Get("Upgrade")) != UpgradeHeader:
+		return ErrUpgradeMismatch
+	case strings.ToLower(hdr.Get("Connection")) != ConnectionHeader:
+		return ErrConnectionMismatch
+	case hdr.Get("Sec-WebSocket-Version") == SecWebSocketVersionHeader:
+		return ErrSecWebSocketVersionMissing
 	}
-	key := r.Header.Get("Sec-WebSocket-Key")
-	if key == "" {
-		return "", errors.New("websocket: missing Sec-WebSocket-Key header")
-	}
-	return key, nil
+	return nil
 }
