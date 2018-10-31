@@ -1,1 +1,1 @@
-module github.com/gbrlsnchs/wsocket
+module github.com/gbrlsnchs/websocket

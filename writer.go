@@ -1,42 +1,35 @@
-package wsocket
+package websocket
 
 import (
 	"bufio"
 	"encoding/binary"
-	"io"
+	"math"
 
-	"github.com/gbrlsnchs/wsocket/internal"
+	"github.com/gbrlsnchs/websocket/internal"
 )
 
+// Writer is a buffered writer that is able to fragment itself in several
+// frames in order to send a message greater than its own internal buffer.
 type Writer struct {
-	w      io.Writer
-	size   int
-	opcode Opcode
-	cc     CloseCode
+	wr     *bufio.Writer
+	opcode uint8
 	err    error
-}
-
-func newWriter(w io.Writer, size int, opcode Opcode) *Writer {
-	return &Writer{
-		w:      w,
-		size:   size,
-		opcode: opcode,
-	}
 }
 
 func (w *Writer) Write(b []byte) (int, error) {
 	if w.err != nil {
 		return 0, w.err
 	}
+	wr := w.wr
 
-	wr := bufio.NewWriterSize(w.w, w.size)
-	fin := byte(0x80 | w.opcode)
-	if bsize, diff := internal.ByteSize(b), wr.Available(); bsize > diff { // check if message needs to be fragmented
-		diff -= bsize - len(b)                             // resolve payload length
-		fin &= byte(w.opcode)                              // set FIN bit to zero
-		next := newWriter(w.w, w.size, opcodeContinuation) // prepare next frame to be sent
-		defer next.Write(b[diff:])                         // schedule next write
-		b = b[:diff]                                       // resolve current payload
+	fin := leftBit | w.opcode
+	// Check if message needs to be fragmented.
+	if bsize, diff := internal.ByteSize(b), wr.Available(); bsize > diff {
+		diff -= bsize - len(b)                                // resolve payload length
+		fin &= w.opcode                                       // set FIN bit to zero
+		next := &Writer{wr: w.wr, opcode: opcodeContinuation} // prepare next frame to be sent
+		defer next.Write(b[diff:])                            // schedule next write
+		b = b[:diff]                                          // resolve current payload
 	}
 
 	if w.err = wr.WriteByte(fin); w.err != nil {
@@ -49,15 +42,15 @@ func (w *Writer) Write(b []byte) (int, error) {
 		if w.err = wr.WriteByte(byte(size)); w.err != nil {
 			return 0, w.err
 		}
-	case size <= int(^uint16(0)):
-		if w.err = wr.WriteByte(byte(126)); w.err != nil {
+	case size <= math.MaxUint16:
+		if w.err = wr.WriteByte(126); w.err != nil {
 			return 0, w.err
 		}
 		if w.err = binary.Write(wr, binary.BigEndian, uint16(size)); w.err != nil {
 			return 0, w.err
 		}
 	default:
-		if w.err = wr.WriteByte(byte(127)); w.err != nil {
+		if w.err = wr.WriteByte(127); w.err != nil {
 			return 0, w.err
 		}
 		if w.err = binary.Write(wr, binary.BigEndian, uint64(size)); w.err != nil {
@@ -75,15 +68,6 @@ func (w *Writer) Write(b []byte) (int, error) {
 	return n, nil
 }
 
-func (w *Writer) WriteByte(b byte) error {
-	_, err := w.Write([]byte{b})
-	return err
-}
-
-func (w *Writer) WriteRune(r rune) (int, error) {
-	return w.Write([]byte(string(r)))
-}
-
-func (w *Writer) WriteString(s string) (int, error) {
-	return w.Write([]byte(s))
+func (w *Writer) SetOpcode(opcode uint8) {
+	w.opcode = opcode
 }
