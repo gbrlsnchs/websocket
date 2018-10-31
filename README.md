@@ -1,8 +1,8 @@
 # wsocket (WebSocket implementation for Go)
 
 ## About
-This is an easy-to-use WebSocket server implementation in [Go].
-It passes [Autobahn Test Suite].
+This is an easy-to-use WebSocket server implementation in [Go](https://golang.org).
+It passes [Autobahn Test Suite](https://crossbar.io/autobahn/testsuite/).
 
 ## Examples
 ### Simple usage inside HTTP handler
@@ -12,29 +12,23 @@ if err != nil {
 	// ...
 }
 // Control frames are handled internally and don't reach this handler.
-ws.OnMessage(func(msg wsocket.Message, opcode wsocket.Opcode) {
-	w := ws.NewWriter(opcode)
-	w.Write(msg) // echo message back
-
-	// Use read/write buffer.
-	rw := bufio.NewReadWriter(msg, w)
-	// ...
+ws.Handle(websocket.EventMessage, func(w websocket.ResponseWriter, r *websocket.Request) {
+	// Echo message back.
+	w.SetOpcode(r.Opcode())
+	w.Write(r.Bytes())
 })
 ```
 
 ### Checking errors
 ```go
-ws.OnError(func(err error) {
-	log.Print(err)
+ws.Handle(websocket.EventError, func(_ websocket.ResponseWriter, r *websocket.Request) {
+	fmt.Println(r.Err())
 })
 ```
 
 ### Run function on close
 ```go
-ws.OnClose(func(cc wsocket.CloseCode) {
-	log.Printf("server closed with close code %d", cc)
+ws.Handle(websocket.EventClose, func(_ websocket.ResponseWriter, r *websocket.Request) {
+	fmt.Printf("server closed with close code %d\n", r.CloseCode())
 })
 ```
-
-[Go]: https://golang.org
-[Autobahn Test Suite]: https://crossbar.io/autobahn/testsuite/
