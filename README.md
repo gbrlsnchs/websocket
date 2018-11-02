@@ -78,7 +78,7 @@ ws.Handle(websocket.EventError, func(_ websocket.ResponseWriter, r *websocket.Re
 
 w := ws.NewWriter()
 w.SetOpcode(websocket.OpcodeText)
-w.Write([]byte("Hello, WebSocket!")
+w.Write([]byte("Hello, WebSocket!"))
 ```
 
 ## Contributing
