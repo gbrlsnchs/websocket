@@ -60,6 +60,15 @@ func (fb *frameBuffer) Read(b []byte) (int, error) {
 	return copy(b, fb.payload), nil
 }
 
+func (fb *frameBuffer) add(f *frame) {
+	if fb.first {
+		fb.opcode = f.opcode
+		fb.first = false
+	}
+	fb.payload = append(fb.payload, f.payload...)
+	fb.done = f.final
+}
+
 func (fb *frameBuffer) next() (*frame, error) {
 	var (
 		b   byte
@@ -156,15 +165,6 @@ func (fb *frameBuffer) next() (*frame, error) {
 		}
 	}
 	return f, nil
-}
-
-func (fb *frameBuffer) push(f *frame) {
-	if fb.first {
-		fb.opcode = f.opcode
-		fb.first = false
-	}
-	fb.payload = append(fb.payload, f.payload...)
-	fb.done = f.final
 }
 
 func (fb *frameBuffer) reset() {
