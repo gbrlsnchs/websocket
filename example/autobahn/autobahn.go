@@ -18,14 +18,14 @@ func main() {
 		}
 
 		ws.Handle(websocket.EventClose, func(_ websocket.ResponseWriter, r *websocket.Request) {
-			fmt.Printf("Server closed with code %d\n", r.CloseCode())
+			fmt.Printf("Server closed with code %d\n", r.CloseCode)
 		})
 		ws.Handle(websocket.EventError, func(_ websocket.ResponseWriter, r *websocket.Request) {
 			fmt.Println(r.Err())
 		})
 		ws.Handle(websocket.EventMessage, func(w websocket.ResponseWriter, r *websocket.Request) {
-			w.SetOpcode(r.Opcode())
-			w.Write(r.Bytes())
+			w.SetOpcode(r.Opcode)
+			w.Write(r.Payload)
 		})
 	}))
 	log.Fatal(http.ListenAndServe(":9001", nil))
