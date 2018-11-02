@@ -70,7 +70,7 @@ func (ws *WebSocket) Close() error {
 	var err error
 	if ws.state >= stateClosing {
 		if ws.closeHandler != nil {
-			defer ws.closeHandler(nil, &Request{cc: ws.cc})
+			defer ws.closeHandler(nil, &Request{CloseCode: ws.cc})
 		}
 		err = ws.conn.Close()
 	}
@@ -146,7 +146,7 @@ func (ws *WebSocket) handleMessage(handler HandlerFunc) {
 			}
 			ws.Close()
 		default:
-			fb.push(f)
+			fb.add(f)
 			if f.final {
 				if fb.opcode == OpcodeText && !utf8.Valid(fb.payload) {
 					ws.handleErr(errors.New("websocket: payload contains invalid UTF-8 text"))
@@ -154,11 +154,11 @@ func (ws *WebSocket) handleMessage(handler HandlerFunc) {
 					return
 				}
 				r := &Request{
-					payload: make([]byte, len(fb.payload)),
-					opcode:  fb.opcode,
-					cc:      f.cc,
+					Payload:   make([]byte, len(fb.payload)),
+					Opcode:    fb.opcode,
+					CloseCode: f.cc,
 				}
-				copy(r.payload, fb.payload)
+				copy(r.Payload, fb.payload)
 				handler(ws.NewWriter(), r)
 				fb.reset()
 			}
