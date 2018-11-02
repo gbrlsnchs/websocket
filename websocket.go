@@ -36,14 +36,10 @@ type WebSocket struct {
 	handler      HandlerFunc
 	errHandler   HandlerFunc
 	closeHandler HandlerFunc
+	client       bool
 }
 
-// UpgradeHTTP switches the protocol from HTTP to the WebSocket Protocol.
-func UpgradeHTTP(w http.ResponseWriter, r *http.Request) (*WebSocket, error) {
-	conn, err := internal.Handshake(w, r)
-	if err != nil {
-		return nil, err
-	}
+func New(conn net.Conn) *WebSocket {
 	return &WebSocket{
 		conn:      conn,
 		rsize:     defaultRWSize,
@@ -51,7 +47,18 @@ func UpgradeHTTP(w http.ResponseWriter, r *http.Request) (*WebSocket, error) {
 		pongSize:  defaultRWSize,
 		closeSize: defaultRWSize,
 		cc:        1000, // default close code
-	}, nil
+	}
+}
+
+// UpgradeHTTP switches the protocol from HTTP to the WebSocket Protocol.
+func UpgradeHTTP(w http.ResponseWriter, r *http.Request) (*WebSocket, error) {
+	conn, err := internal.Handshake(w, r)
+	if err != nil {
+		status := http.StatusBadRequest
+		http.Error(w, http.StatusText(status), status)
+		return nil, err
+	}
+	return New(conn), nil
 }
 
 // Close closes the connection manually by sending the close code 1000.
@@ -79,13 +86,12 @@ func (ws *WebSocket) Handle(e Event, handler HandlerFunc) {
 		ws.errHandler = handler
 	case EventMessage:
 		go ws.handleMessage(handler)
-	case EventOpen:
 	}
 }
 
 func (ws *WebSocket) NewWriter() ResponseWriter { return ws.NewWriterSize(ws.wsize) }
 func (ws *WebSocket) NewWriterSize(size int) ResponseWriter {
-	return &Writer{wr: bufio.NewWriterSize(ws.conn, size)}
+	return &Writer{wr: bufio.NewWriterSize(ws.conn, size), client: ws.client}
 }
 
 func (ws *WebSocket) SetBufferSize(rsize, wsize int) { ws.rsize, ws.wsize = rsize, wsize }
@@ -110,12 +116,13 @@ func (ws *WebSocket) handleErr(err error) {
 
 func (ws *WebSocket) handleMessage(handler HandlerFunc) {
 	fb := newFrameBuffer(ws.conn, ws.rsize)
+	fb.client = ws.client
 	fb.reset()
 	for ws.state != stateClosed {
 		f, err := fb.next()
 		if err != nil {
+			ws.handleErr(err)
 			if err != io.EOF {
-				ws.handleErr(err)
 				ws.conn.Close()
 			}
 			return

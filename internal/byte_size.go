@@ -2,7 +2,7 @@ package internal
 
 import "math"
 
-func ByteSize(b []byte) (size int) {
+func ByteSize(b []byte, masked bool) (size int) {
 	size++ // FIN
 
 	length := len(b)
@@ -13,6 +13,9 @@ func ByteSize(b []byte) (size int) {
 		size += 3 // indicator + 2 bytes for length value
 	default:
 		size += 9 // indicator + 8 bytes for length value
+	}
+	if masked {
+		size += 4 // 4 bytes for masking-key
 	}
 	return size + length
 }

@@ -34,6 +34,7 @@ type frameBuffer struct {
 	opcode  uint8
 	payload []byte
 	rd      *bufio.Reader
+	client  bool
 }
 
 func newFrameBuffer(r io.Reader, size int) *frameBuffer {
@@ -103,7 +104,7 @@ func (fb *frameBuffer) next() (*frame, error) {
 		return nil, err
 	}
 	masked, length := b&leftBit, int(b&lengthBits)
-	if masked == 0 {
+	if masked == 0 && !fb.client {
 		return nil, errUnmasked
 	}
 	if opcode >= opcodeClose && length > 125 {
@@ -135,10 +136,13 @@ func (fb *frameBuffer) next() (*frame, error) {
 		return nil, errIllegalLength
 	}
 
-	// Unmask the payload.
-	mask := make([]byte, 4)
-	if _, err = io.ReadFull(rd, mask); err != nil {
-		return nil, err
+	var m mask
+	if !fb.client {
+		// Unmask the payload.
+		m = make(mask, 4)
+		if _, err = io.ReadFull(rd, m); err != nil {
+			return nil, err
+		}
 	}
 	length = len(payload)
 	f := &frame{
@@ -150,9 +154,9 @@ func (fb *frameBuffer) next() (*frame, error) {
 		if _, err = io.ReadFull(rd, payload); err != nil {
 			return nil, err
 		}
-		// Decode the payload according to the RFC 6455.
-		for i := range payload {
-			payload[i] ^= mask[i%4]
+		if !fb.client {
+			// Decode the payload according to the RFC 6455.
+			m.transform(payload)
 		}
 		// Read close data if there's any.
 		if opcode == opcodeClose {

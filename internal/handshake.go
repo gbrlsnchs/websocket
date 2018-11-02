@@ -22,6 +22,7 @@ var (
 	ErrConnectionMismatch         = errors.New("websocket: Connection header mismatch")
 	ErrSecWebSocketVersionMissing = errors.New("websocket: missing Sec-WebSocket-Version header")
 	ErrInvalidSecWebSocketKey     = errors.New("websocket: invalid Sec-WebSocket-Key")
+	ErrSecWebSocketKeyMismatch    = errors.New("websocket: key mismatch")
 )
 
 func Handshake(w http.ResponseWriter, r *http.Request) (net.Conn, error) {
@@ -32,9 +33,7 @@ func Handshake(w http.ResponseWriter, r *http.Request) (net.Conn, error) {
 	}
 
 	var err error
-	if err = Validate(r.Header); err != nil {
-		status := http.StatusBadRequest
-		http.Error(w, http.StatusText(status), status)
+	if err = validateClientHeaders(r.Header); err != nil {
 		return nil, err
 	}
 
@@ -43,8 +42,6 @@ func Handshake(w http.ResponseWriter, r *http.Request) (net.Conn, error) {
 	hdr.Set("Connection", "Upgrade")
 	key, err := ConcatKey(r.Header.Get("Sec-WebSocket-Key"))
 	if err != nil {
-		status := http.StatusBadRequest
-		http.Error(w, http.StatusText(status), status)
 		return nil, err
 	}
 	hdr.Set("Sec-WebSocket-Accept", base64.StdEncoding.EncodeToString(key))
@@ -74,7 +71,7 @@ func ConcatKey(key string) ([]byte, error) {
 	return sha.Sum(nil), nil
 }
 
-func Validate(hdr http.Header) error {
+func validateClientHeaders(hdr http.Header) error {
 	switch {
 	case strings.ToLower(hdr.Get("Upgrade")) != UpgradeHeader:
 		return ErrUpgradeMismatch
@@ -82,6 +79,14 @@ func Validate(hdr http.Header) error {
 		return ErrConnectionMismatch
 	case hdr.Get("Sec-WebSocket-Version") != SecWebSocketVersionHeader:
 		return ErrSecWebSocketVersionMissing
+	}
+	key := hdr.Get("Sec-WebSocket-Key")
+	dec, err := base64.StdEncoding.DecodeString(key)
+	if err != nil {
+		return err
+	}
+	if len(dec) != 16 {
+		return ErrInvalidSecWebSocketKey
 	}
 	return nil
 }
