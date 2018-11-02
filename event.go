@@ -7,5 +7,4 @@ const (
 	EventClose Event = iota
 	EventError
 	EventMessage
-	EventOpen
 )
