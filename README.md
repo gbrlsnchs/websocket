@@ -14,8 +14,8 @@ if err != nil {
 // Control frames are handled internally and don't reach this handler.
 ws.Handle(websocket.EventMessage, func(w websocket.ResponseWriter, r *websocket.Request) {
 	// Echo message back.
-	w.SetOpcode(r.Opcode())
-	w.Write(r.Bytes())
+	w.SetOpcode(r.Opcode)
+	w.Write(r.Payload)
 })
 ```
 
@@ -29,6 +29,6 @@ ws.Handle(websocket.EventError, func(_ websocket.ResponseWriter, r *websocket.Re
 ### Run function on close
 ```go
 ws.Handle(websocket.EventClose, func(_ websocket.ResponseWriter, r *websocket.Request) {
-	fmt.Printf("server closed with close code %d\n", r.CloseCode())
+	fmt.Printf("server closed with close code %d\n", r.CloseCode)
 })
 ```
