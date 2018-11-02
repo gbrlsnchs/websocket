@@ -70,7 +70,7 @@ func (ws *WebSocket) Close() error {
 	var err error
 	if ws.state >= stateClosing {
 		if ws.closeHandler != nil {
-			defer ws.closeHandler(nil, &Request{CloseCode: ws.cc})
+			defer ws.handleClose(ws.cc)
 		}
 		err = ws.conn.Close()
 	}
@@ -99,12 +99,9 @@ func (ws *WebSocket) SetCloseBufferSize(size int)    { ws.closeSize = size }
 func (ws *WebSocket) SetCloseCode(cc CloseCode)      { ws.cc = cc }
 func (ws *WebSocket) SetPongBufferSize(size int)     { ws.pongSize = size }
 
-func (ws *WebSocket) handleClose(b []byte) {
-	switch ws.state {
-	case stateOpen:
-	case stateClosing:
-		ws.conn.Close()
-	case stateClosed: // no-op
+func (ws *WebSocket) handleClose(cc CloseCode) {
+	if ws.closeHandler != nil {
+		ws.closeHandler(nil, &Request{CloseCode: cc})
 	}
 }
 
@@ -121,10 +118,12 @@ func (ws *WebSocket) handleMessage(handler HandlerFunc) {
 	for ws.state != stateClosed {
 		f, err := fb.next()
 		if err != nil {
-			ws.handleErr(err)
 			if err != io.EOF {
+				ws.handleErr(err)
 				ws.conn.Close()
+				return
 			}
+			ws.handleClose(0)
 			return
 		}
 
