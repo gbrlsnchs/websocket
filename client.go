@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -17,7 +18,20 @@ import (
 
 // Open opens a websocket client.
 func Open(address string) (*WebSocket, error) {
-	r, err := http.NewRequest(http.MethodGet, address, nil)
+	uri, err := url.Parse(address)
+	if err != nil {
+		return nil, err
+	}
+	switch uri.Scheme {
+	case "ws":
+		uri.Scheme = "http"
+	case "wss":
+		uri.Scheme = "https"
+	default:
+		return nil, fmt.Errorf("websocket: unsupported protocol %s", uri.Scheme)
+	}
+
+	r, err := http.NewRequest(http.MethodGet, uri.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -31,10 +45,6 @@ func Open(address string) (*WebSocket, error) {
 	encKey := base64.StdEncoding.EncodeToString(guid[:])
 	r.Header.Set("Sec-WebSocket-Key", encKey)
 
-	uri, err := url.Parse(address)
-	if err != nil {
-		return nil, err
-	}
 	d := &net.Dialer{Timeout: 15 * time.Second}
 	conn, err := d.Dial("tcp", uri.Host)
 	if err != nil {
