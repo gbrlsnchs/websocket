@@ -6,8 +6,6 @@ import (
 	"encoding/binary"
 	"io"
 	"math"
-
-	"github.com/gbrlsnchs/websocket/internal"
 )
 
 // Writer is a buffered writer that is able to fragment itself in several
@@ -27,7 +25,7 @@ func (w *Writer) Write(b []byte) (int, error) {
 
 	fin := leftBit | w.opcode
 	// Check if message needs to be fragmented.
-	if bsize, diff := internal.ByteSize(b, w.client), wr.Available(); bsize > diff {
+	if bsize, diff := w.byteSize(b), wr.Available(); bsize > diff {
 		diff -= bsize - len(b)                                // resolve payload length
 		fin &= w.opcode                                       // set FIN bit to zero
 		next := &Writer{wr: w.wr, opcode: opcodeContinuation} // prepare next frame to be sent
@@ -88,6 +86,20 @@ func (w *Writer) Write(b []byte) (int, error) {
 	return n, nil
 }
 
-func (w *Writer) SetOpcode(opcode uint8) {
-	w.opcode = opcode
+func (w *Writer) byteSize(b []byte) (size int) {
+	size++ // FIN
+
+	length := len(b)
+	switch {
+	case length <= 125:
+		size++ // indicator is the current length
+	case length <= math.MaxUint16:
+		size += 3 // indicator + 2 bytes for length value
+	default:
+		size += 9 // indicator + 8 bytes for length value
+	}
+	if w.client {
+		size += 4 // 4 bytes for masking-key
+	}
+	return size + length
 }
