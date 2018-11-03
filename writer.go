@@ -17,6 +17,10 @@ type Writer struct {
 	client bool
 }
 
+func (w *Writer) SetOpcode(opcode uint8) {
+	w.opcode = opcode
+}
+
 func (w *Writer) Write(b []byte) (int, error) {
 	if w.err != nil {
 		return 0, w.err

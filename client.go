@@ -16,7 +16,7 @@ import (
 	"github.com/gbrlsnchs/websocket/internal"
 )
 
-// Open opens a websocket client.
+// Open creates a WebSocket client.
 func Open(address string) (*WebSocket, error) {
 	uri, err := url.Parse(address)
 	if err != nil {
@@ -73,10 +73,7 @@ func Open(address string) (*WebSocket, error) {
 		conn.Close()
 		return nil, err
 	}
-
-	ws := New(conn)
-	ws.client = true
-	return ws, nil
+	return newWebSocket(conn, true), nil
 }
 
 func validateServerHeaders(hdr http.Header, encKey string) error {
