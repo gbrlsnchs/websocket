@@ -16,17 +16,18 @@ func main() {
 			fmt.Println(err)
 			return
 		}
+		ww := ws.NewWriter() // one buffered writer is enough
 
-		ws.Handle(websocket.EventClose, func(_ websocket.ResponseWriter, r *websocket.Request) {
-			fmt.Printf("Server closed with code %d\n", r.CloseCode)
-		})
-		ws.Handle(websocket.EventError, func(_ websocket.ResponseWriter, r *websocket.Request) {
-			fmt.Println(r.Err())
-		})
-		ws.Handle(websocket.EventMessage, func(w websocket.ResponseWriter, r *websocket.Request) {
-			w.SetOpcode(r.Opcode)
-			w.Write(r.Payload)
-		})
+		for ws.IsOpen() {
+			b, opcode, err := ws.Accept()
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			ww.SetOpcode(opcode)
+			ww.Write(b)
+		}
+		fmt.Println(ws.CloseCode())
 	}))
 	log.Fatal(http.ListenAndServe(":9001", nil))
 }
