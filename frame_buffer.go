@@ -37,10 +37,6 @@ type frameBuffer struct {
 	client  bool
 }
 
-func newFrameBuffer(r io.Reader, size int) *frameBuffer {
-	return &frameBuffer{rd: bufio.NewReaderSize(r, size)}
-}
-
 // Bytes returns the internal payload that was buffered
 // from the first frame until the final frame sequence.
 func (fb *frameBuffer) Bytes() []byte {
@@ -164,7 +160,7 @@ func (fb *frameBuffer) next() (*frame, error) {
 				return nil, errInvalidClosePayload
 			}
 			f.hasCloseCode = true
-			f.cc = CloseCode(binary.BigEndian.Uint16(payload[:2]))
+			f.cc = binary.BigEndian.Uint16(payload[:2])
 			f.payload = payload[2:]
 		}
 	}
