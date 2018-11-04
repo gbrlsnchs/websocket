@@ -22,11 +22,18 @@ func Open(address string) (*WebSocket, error) {
 	if err != nil {
 		return nil, err
 	}
+	noPort := uri.Port() == ""
 	switch uri.Scheme {
 	case "ws":
 		uri.Scheme = "http"
+		if noPort {
+			uri.Host += ":80"
+		}
 	case "wss":
 		uri.Scheme = "https"
+		if noPort {
+			uri.Host += ":443"
+		}
 	default:
 		return nil, fmt.Errorf("websocket: unsupported protocol %s", uri.Scheme)
 	}
