@@ -16,16 +16,13 @@ func main() {
 			fmt.Println(err)
 			return
 		}
-		ww := ws.NewWriter() // one buffered writer is enough
 
-		for ws.IsOpen() {
-			b, opcode, err := ws.Accept()
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			ww.SetOpcode(opcode)
-			ww.Write(b)
+		for ws.Next() {
+			ws.SetWriteOpcode(ws.Opcode())
+			ws.Write(ws.Payload())
+		}
+		if err = ws.Err(); err != nil {
+			fmt.Println(err)
 		}
 		fmt.Println(ws.CloseCode())
 	}))
