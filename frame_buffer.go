@@ -180,7 +180,7 @@ func (fb *frameBuffer) reset() {
 
 func (fb *frameBuffer) validate() error {
 	if fb.opcode == OpcodeText && !utf8.Valid(fb.payload) {
-		return errors.New("websocket: payload contains invalid UTF-8 text")
+		return errInvalidUTF8
 	}
 	return nil
 }
