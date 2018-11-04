@@ -82,7 +82,7 @@ func Open(address string) (*WebSocket, error) {
 		conn.Close()
 		return nil, err
 	}
-	return newWebSocket(conn, true), nil
+	return newWS(conn, true), nil
 }
 
 func validateServerHeaders(hdr http.Header, encKey string) error {

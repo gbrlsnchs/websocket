@@ -37,10 +37,7 @@ type WebSocket struct {
 	client    bool
 }
 
-func newWebSocket(conn net.Conn, client bool) *WebSocket {
-	fb := newFrameBuffer(conn, defaultRWSize)
-	fb.client = client
-	fb.reset()
+func newWS(conn net.Conn, client bool) *WebSocket {
 	return &WebSocket{
 		conn:      conn,
 		fb:        fb,
