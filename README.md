@@ -30,55 +30,40 @@ func upgradingHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// handle error
 	}
+	ww := ws.NewWriter() // one buffered writer is enough
 
-	// Handle incoming messages.
-	// Control frames are handled internally and don't reach this handler.
-	ws.Handle(websocket.EventMessage, func(w websocket.ResponseWriter, r *websocket.Request) {
-		// Echo message back.
-		w.SetOpcode(r.Opcode)
-		w.Write(r.Payload)
-	})
-
-	// Handle close event.
-	ws.Handle(websocket.EventClose, func(_ websocket.ResponseWriter, r *websocket.Request) {
-		fmt.Printf("Server closed with close code %d.\n", r.CloseCode)
-	})
-
-	// Handle errors caught while processing a request.
-	ws.Handle(websocket.EventError, func(_ websocket.ResponseWriter, r *websocket.Request) {
-		fmt.Println(r.Err())
-	})
+	for ws.IsOpen() {
+		b, opcode, err := ws.Accept()
+		if err != nil {
+			fmt.Println(err)
+			break
+		}
+		ww.SetOpcode(opcode)
+		ww.Write(b)
+	}
+	fmt.Println(ws.CloseCode())
 }
 ```
 
 ### Using a client
 ```go
-ws, err := websocket.Open("ws://localhost:9001")
+ws, err := websocket.Open("ws://echo.websocket.org")
 if err != nil {
 	// handle error
 }
 
-// Handle incoming messages.
-// Control frames are handled internally and don't reach this handler.
-ws.Handle(websocket.EventMessage, func(w websocket.ResponseWriter, r *websocket.Request) {
-	// Echo message back.
-	w.SetOpcode(r.Opcode)
-	w.Write(r.Payload)
-})
-
-// Handle close event.
-ws.Handle(websocket.EventClose, func(_ websocket.ResponseWriter, r *websocket.Request) {
-	fmt.Printf("Server closed with close code %d.\n", r.CloseCode)
-})
-
-// Handle errors caught while processing a request.
-ws.Handle(websocket.EventError, func(_ websocket.ResponseWriter, r *websocket.Request) {
-	fmt.Println(r.Err())
-})
-
 w := ws.NewWriter()
-w.SetOpcode(websocket.OpcodeText)
 w.Write([]byte("Hello, WebSocket!"))
+
+for ws.IsOpen() {
+	b, _, err := ws.Accept()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	fmt.Printf("Message sent from server: %s\n", b)
+}
+fmt.Println(ws.CloseCode())
 ```
 
 ## Contributing
