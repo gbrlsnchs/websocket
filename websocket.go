@@ -44,7 +44,6 @@ func newWebSocket(conn net.Conn, client bool) *WebSocket {
 		wsize:     defaultRWSize,
 		pongSize:  defaultRWSize,
 		closeSize: defaultRWSize,
-		cc:        1000, // default close code
 		client:    client,
 	}
 }
@@ -78,6 +77,7 @@ func (ws *WebSocket) Accept() ([]byte, uint8, error) {
 		case f.opcode == opcodePong: // no-op
 		case f.opcode == opcodeClose:
 			defer ws.Close()
+			ws.cc = 1000
 			ws.resolveState()
 			if f.hasCloseCode && !f.cc.isValid() {
 				ws.cc = 1002
@@ -106,12 +106,11 @@ func (ws *WebSocket) Accept() ([]byte, uint8, error) {
 	}
 }
 
-func (ws *WebSocket) CloseCode() CloseCode {
-	return ws.cc
-}
-
 // Close closes the connection manually by sending the close code 1000.
 func (ws *WebSocket) Close() error {
+	if ws.cc == 0 {
+		ws.cc = 1000
+	}
 	w := ws.NewWriterSize(ws.closeSize)
 	w.SetOpcode(opcodeClose)
 	binary.Write(w, binary.BigEndian, ws.cc)
@@ -122,6 +121,10 @@ func (ws *WebSocket) Close() error {
 	}
 	ws.resolveState()
 	return err
+}
+
+func (ws *WebSocket) CloseCode() CloseCode {
+	return ws.cc
 }
 
 func (ws *WebSocket) IsOpen() bool {
