@@ -24,27 +24,35 @@ const (
 	stateClosed
 )
 
-// WebSocket is a websocket instance that is created
-// when an HTTP connection is upgraded.
+// WebSocket is a websocket instance that may be
+// either a client or a server depending on how it is created.
 type WebSocket struct {
-	conn      net.Conn
-	fb        *frameBuffer
-	wsize     int
-	pongSize  int
-	closeSize int
-	state     int
-	cc        uint16
-	client    bool
+	*writer
+
+	fb   *frameBuffer
+	conn io.Closer
+
+	state int
+	cc    uint16
+
+	opcode  uint8
+	payload []byte
+	err     error
 }
 
 func newWS(conn net.Conn, client bool) *WebSocket {
 	return &WebSocket{
-		conn:      conn,
-		fb:        fb,
-		wsize:     defaultRWSize,
-		pongSize:  defaultRWSize,
-		closeSize: defaultRWSize,
-		client:    client,
+		fb: &frameBuffer{
+			rd:     bufio.NewReaderSize(conn, defaultRWSize),
+			first:  true,
+			client: client,
+		},
+		writer: &writer{
+			wr:     bufio.NewWriterSize(conn, defaultRWSize),
+			opcode: OpcodeText,
+			client: client,
+		},
+		conn: conn,
 	}
 }
 
@@ -56,19 +64,39 @@ func UpgradeHTTP(w http.ResponseWriter, r *http.Request) (*WebSocket, error) {
 		http.Error(w, http.StatusText(status), status)
 		return nil, err
 	}
-	return newWebSocket(conn, false), nil
+	return newWS(conn, false), nil
 }
 
-func (ws *WebSocket) Accept() ([]byte, uint8, error) {
+// Close closes the connection manually by sending the close code 1000.
+func (ws *WebSocket) Close() error {
+	if ws.cc == 0 {
+		ws.cc = 1000
+	}
+	ws.SetWriteOpcode(opcodeClose)
+	binary.Write(ws, binary.BigEndian, ws.cc)
+
+	var err error
+	if ws.state >= stateClosing {
+		err = ws.conn.Close()
+	}
+	ws.resolveState()
+	return err
+}
+
+func (ws *WebSocket) CloseCode() uint16 { return ws.cc }
+func (ws *WebSocket) Err() error        { return ws.err }
+
+func (ws *WebSocket) Next() bool {
 	for {
 		f, err := ws.fb.next()
 		if err != nil {
 			ws.state = stateClosed
 			if err == io.EOF {
-				return nil, 0, nil
+				return false
 			}
 			ws.conn.Close()
-			return nil, 0, err
+			ws.err = err
+			return false
 		}
 
 		switch {
@@ -81,67 +109,37 @@ func (ws *WebSocket) Accept() ([]byte, uint8, error) {
 			ws.resolveState()
 			if f.hasCloseCode && !validCloseCode(f.cc) {
 				ws.cc = 1002
-				return nil, 0, errInvalidCloseCode
+				ws.err = errInvalidCloseCode
+				return false
 			}
 			if !utf8.Valid(f.payload) {
 				ws.cc = 1002
-				return nil, 0, errInvalidClosePayload
+				ws.err = errInvalidClosePayload
+				return false
 			}
-			b := make([]byte, len(ws.fb.payload))
-			copy(b, ws.fb.payload)
-			return b, f.opcode, nil
+			ws.opcode = f.opcode
+			ws.payload = f.payload
+			return false
 		default:
 			ws.fb.add(f)
 			if f.final {
 				defer ws.fb.reset()
 				if ws.fb.opcode == OpcodeText && !utf8.Valid(ws.fb.payload) {
 					ws.conn.Close()
-					return nil, 0, errInvalidUTF8
+					ws.err = errInvalidUTF8
+					return false
 				}
-				b := make([]byte, len(ws.fb.payload))
-				copy(b, ws.fb.payload)
-				return b, ws.fb.opcode, nil
+				ws.opcode = ws.fb.opcode
+				ws.payload = ws.fb.payload
+				return true
 			}
 		}
 	}
 }
 
-// Close closes the connection manually by sending the close code 1000.
-func (ws *WebSocket) Close() error {
-	if ws.cc == 0 {
-		ws.cc = 1000
-	}
-	w := ws.NewWriterSize(ws.closeSize)
-	w.SetOpcode(opcodeClose)
-	binary.Write(w, binary.BigEndian, ws.cc)
-
-	var err error
-	if ws.state >= stateClosing {
-		err = ws.conn.Close()
-	}
-	ws.resolveState()
-	return err
-}
-
-func (ws *WebSocket) CloseCode() uint16 {
-	return ws.cc
-}
-
-func (ws *WebSocket) IsOpen() bool {
-	return ws.state != stateClosed
-}
-
-func (ws *WebSocket) NewWriter() *Writer { return ws.NewWriterSize(ws.wsize) }
-func (ws *WebSocket) NewWriterSize(size int) *Writer {
-	return &Writer{wr: bufio.NewWriterSize(ws.conn, size), opcode: OpcodeText, client: ws.client}
-}
-
-func (ws *WebSocket) SetBufferSize(rsize, wsize int) {
-	ws.fb.rd = bufio.NewReaderSize(ws.conn, rsize)
-	ws.wsize = wsize
-}
-
-func (ws *WebSocket) SetCloseBufferSize(size int) { ws.closeSize = size }
+func (ws *WebSocket) Opcode() uint8              { return ws.opcode }
+func (ws *WebSocket) Payload() []byte            { return ws.payload }
+func (ws *WebSocket) Read(b []byte) (int, error) { return copy(b, ws.payload), nil }
 
 func (ws *WebSocket) SetCloseCode(cc uint16) error {
 	if !validCloseCode(cc) {
@@ -151,12 +149,11 @@ func (ws *WebSocket) SetCloseCode(cc uint16) error {
 	return nil
 }
 
-func (ws *WebSocket) SetPongBufferSize(size int) { ws.pongSize = size }
+func (ws *WebSocket) SetWriteOpcode(opcode uint8) { ws.writer.opcode = opcode }
 
 func (ws *WebSocket) handlePing(b []byte) {
-	w := ws.NewWriterSize(ws.pongSize)
-	w.SetOpcode(opcodePong)
-	w.Write(b)
+	ws.SetWriteOpcode(opcodePong)
+	ws.Write(b)
 }
 
 func (ws *WebSocket) resolveState() {
