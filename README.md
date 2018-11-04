@@ -23,7 +23,7 @@ import (
 ```
 
 ## Examples
-### Upgrading an HTTP request
+### Upgrading an HTTP request and listening to messages
 ```go
 func upgradingHandler(w http.ResponseWriter, r *http.Request) {
 	ws, err := websocket.UpgradeHTTP(w, r)
@@ -45,7 +45,7 @@ func upgradingHandler(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-### Using a client
+### Openning connection to a WebSocket server (client mode)
 ```go
 ws, err := websocket.Open("ws://echo.websocket.org")
 if err != nil {
