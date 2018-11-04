@@ -20,20 +20,26 @@ func main() {
 	}
 
 	w := ws.NewWriter()
-	go func() {
-		for ws.IsOpen() {
-			b, _, err := ws.Accept()
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
-			fmt.Printf("Message sent from server = %s\n", b)
-		}
-		fmt.Println(ws.CloseCode())
-	}()
+	w.Write([]byte("Hello, WebSocket!"))
 
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		w.Write(scanner.Bytes())
+	go func() {
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			b := scanner.Bytes()
+			if string(b) == "close" {
+				ws.Close()
+				continue
+			}
+			w.Write(scanner.Bytes())
+		}
+	}()
+	for ws.IsOpen() {
+		b, _, err := ws.Accept()
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		fmt.Printf("Message sent from server: %s\n", b)
 	}
+	fmt.Println(ws.CloseCode())
 }
