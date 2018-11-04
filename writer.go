@@ -8,20 +8,14 @@ import (
 	"math"
 )
 
-// Writer is a buffered writer that is able to fragment itself in several
-// frames in order to send a message greater than its own internal buffer.
-type Writer struct {
+type writer struct {
 	wr     *bufio.Writer
 	opcode uint8
 	err    error
 	client bool
 }
 
-func (w *Writer) SetOpcode(opcode uint8) {
-	w.opcode = opcode
-}
-
-func (w *Writer) Write(b []byte) (int, error) {
+func (w *writer) Write(b []byte) (int, error) {
 	if w.err != nil {
 		return 0, w.err
 	}
@@ -32,7 +26,7 @@ func (w *Writer) Write(b []byte) (int, error) {
 	if bsize, diff := w.byteSize(b), wr.Available(); bsize > diff {
 		diff -= bsize - len(b)                                // resolve payload length
 		fin &= w.opcode                                       // set FIN bit to zero
-		next := &Writer{wr: w.wr, opcode: opcodeContinuation} // prepare next frame to be sent
+		next := &writer{wr: w.wr, opcode: opcodeContinuation} // prepare next frame to be sent
 		defer next.Write(b[diff:])                            // schedule next write
 		b = b[:diff]                                          // resolve current payload
 	}
@@ -90,7 +84,7 @@ func (w *Writer) Write(b []byte) (int, error) {
 	return n, nil
 }
 
-func (w *Writer) byteSize(b []byte) (size int) {
+func (w *writer) byteSize(b []byte) (size int) {
 	size++ // FIN
 
 	length := len(b)
