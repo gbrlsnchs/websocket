@@ -30,16 +30,13 @@ func upgradingHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// handle error
 	}
-	ww := ws.NewWriter() // one buffered writer is enough
 
-	for ws.IsOpen() {
-		b, opcode, err := ws.Accept()
-		if err != nil {
-			fmt.Println(err)
-			break
-		}
-		ww.SetOpcode(opcode)
-		ww.Write(b)
+	for ws.Next() {
+		ws.SetWriteOpcode(ws.Opcode())
+		ws.Write(ws.Payload())
+	}
+	if err := ws.Err(); err != nil {
+		fmt.Println(err)
 	}
 	fmt.Println(ws.CloseCode())
 }
@@ -52,16 +49,14 @@ if err != nil {
 	// handle error
 }
 
-w := ws.NewWriter()
-w.Write([]byte("Hello, WebSocket!"))
+ws.Write([]byte("Hello, WebSocket!"))
 
-for ws.IsOpen() {
-	b, _, err := ws.Accept()
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	fmt.Printf("Message sent from server: %s\n", b)
+for ws.Next() {
+	fmt.Printf("Message sent from server: %s\n", ws.Payload())
+}
+if err := ws.Err(); err != nil {
+	fmt.Println(err)
+	os.Exit(1)
 }
 fmt.Println(ws.CloseCode())
 ```
