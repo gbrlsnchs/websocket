@@ -16,7 +16,9 @@ import (
 	"github.com/gbrlsnchs/websocket/internal"
 )
 
-// Open creates a WebSocket client.
+// Open creates a WebSocket instance in client mode.
+// The address must use either "ws" or "wss" protocols.
+// If the port is omitted, it assumes port 80 for "ws" and port 443 for "wss".
 func Open(address string) (*WebSocket, error) {
 	uri, err := url.Parse(address)
 	if err != nil {
