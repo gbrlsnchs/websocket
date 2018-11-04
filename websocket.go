@@ -12,7 +12,10 @@ import (
 	"github.com/gbrlsnchs/websocket/internal"
 )
 
-var errInvalidCloseCode = errors.New("websocket: invalid close code")
+var (
+	errInvalidCloseCode = errors.New("websocket: invalid close code")
+	errInvalidUTF8      = errors.New("websocket: payload contains invalid UTF-8 content")
+)
 
 const defaultRWSize = 4096
 const (
@@ -21,7 +24,7 @@ const (
 	stateClosed
 )
 
-// WebSocket is an websocket instance that is created
+// WebSocket is a websocket instance that is created
 // when an HTTP connection is upgraded.
 type WebSocket struct {
 	conn      net.Conn
@@ -30,7 +33,7 @@ type WebSocket struct {
 	pongSize  int
 	closeSize int
 	state     int
-	cc        CloseCode
+	cc        uint16
 	client    bool
 }
 
@@ -79,7 +82,7 @@ func (ws *WebSocket) Accept() ([]byte, uint8, error) {
 			defer ws.Close()
 			ws.cc = 1000
 			ws.resolveState()
-			if f.hasCloseCode && !f.cc.isValid() {
+			if f.hasCloseCode && !validCloseCode(f.cc) {
 				ws.cc = 1002
 				return nil, 0, errInvalidCloseCode
 			}
@@ -96,7 +99,7 @@ func (ws *WebSocket) Accept() ([]byte, uint8, error) {
 				defer ws.fb.reset()
 				if ws.fb.opcode == OpcodeText && !utf8.Valid(ws.fb.payload) {
 					ws.conn.Close()
-					return nil, 0, errors.New("websocket: payload contains invalid UTF-8 text")
+					return nil, 0, errInvalidUTF8
 				}
 				b := make([]byte, len(ws.fb.payload))
 				copy(b, ws.fb.payload)
@@ -123,7 +126,7 @@ func (ws *WebSocket) Close() error {
 	return err
 }
 
-func (ws *WebSocket) CloseCode() CloseCode {
+func (ws *WebSocket) CloseCode() uint16 {
 	return ws.cc
 }
 
@@ -142,8 +145,16 @@ func (ws *WebSocket) SetBufferSize(rsize, wsize int) {
 }
 
 func (ws *WebSocket) SetCloseBufferSize(size int) { ws.closeSize = size }
-func (ws *WebSocket) SetCloseCode(cc CloseCode)   { ws.cc = cc }
-func (ws *WebSocket) SetPongBufferSize(size int)  { ws.pongSize = size }
+
+func (ws *WebSocket) SetCloseCode(cc uint16) error {
+	if !validCloseCode(cc) {
+		return errInvalidCloseCode
+	}
+	ws.cc = cc
+	return nil
+}
+
+func (ws *WebSocket) SetPongBufferSize(size int) { ws.pongSize = size }
 
 func (ws *WebSocket) handlePing(b []byte) {
 	w := ws.NewWriterSize(ws.pongSize)

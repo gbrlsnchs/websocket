@@ -14,6 +14,6 @@ type frame struct {
 	final        bool
 	opcode       uint8
 	payload      []byte
-	cc           CloseCode
+	cc           uint16
 	hasCloseCode bool
 }
