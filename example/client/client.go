@@ -12,6 +12,7 @@ import (
 
 func main() {
 	address := flag.String("addr", "ws://echo.websocket.org", "address to connect to")
+	skip := flag.Bool("skip", false, "skip sending hello world")
 	flag.Parse()
 
 	ws, err := websocket.Open(*address)
@@ -19,7 +20,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	ws.Write([]byte("Hello, WebSocket!"))
+	if !*skip {
+		ws.Write([]byte("Hello, WebSocket!"))
+	}
 
 	go func() {
 		scanner := bufio.NewScanner(os.Stdin)
