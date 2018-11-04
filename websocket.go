@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"unicode/utf8"
@@ -63,6 +64,10 @@ func (ws *WebSocket) Accept() ([]byte, uint8, error) {
 	for {
 		f, err := ws.fb.next()
 		if err != nil {
+			ws.state = stateClosed
+			if err == io.EOF {
+				return nil, 0, nil
+			}
 			ws.conn.Close()
 			return nil, 0, err
 		}
