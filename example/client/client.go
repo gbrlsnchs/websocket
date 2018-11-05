@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/gbrlsnchs/websocket"
 )
@@ -15,7 +16,7 @@ func main() {
 	skip := flag.Bool("skip", false, "skip sending hello world")
 	flag.Parse()
 
-	ws, err := websocket.Open(*address)
+	ws, err := websocket.Open(*address, 15*time.Second)
 	if err != nil {
 		log.Fatal(err)
 	}

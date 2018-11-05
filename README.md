@@ -45,7 +45,7 @@ func upgradingHandler(w http.ResponseWriter, r *http.Request) {
 
 ### Openning connection to a WebSocket server (client mode)
 ```go
-ws, err := websocket.Open("ws://echo.websocket.org")
+ws, err := websocket.Open("ws://echo.websocket.org", 15*time.Second)
 if err != nil {
 	// handle error
 }
