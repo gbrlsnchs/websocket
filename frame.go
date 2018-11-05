@@ -1,13 +1,13 @@
 package websocket
 
 const (
-	OpcodeText   = 0x1
-	OpcodeBinary = 0x2
+	OpcodeText   uint8 = 0x1
+	OpcodeBinary uint8 = 0x2
 
-	opcodeContinuation = 0x0
-	opcodeClose        = 0x8
-	opcodePing         = 0x9
-	opcodePong         = 0xA
+	opcodeContinuation uint8 = 0x0
+	opcodeClose        uint8 = 0x8
+	opcodePing         uint8 = 0x9
+	opcodePong         uint8 = 0xA
 )
 
 type frame struct {
