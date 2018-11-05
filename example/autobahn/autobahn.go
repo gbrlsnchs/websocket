@@ -18,8 +18,9 @@ func main() {
 		}
 
 		for ws.Next() {
-			ws.SetWriteOpcode(ws.Opcode())
-			ws.Write(ws.Payload())
+			payload, opcode := ws.Message()
+			ws.SetOpcode(opcode)
+			ws.Write(payload)
 		}
 		if err = ws.Err(); err != nil {
 			fmt.Println(err)

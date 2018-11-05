@@ -36,7 +36,8 @@ func main() {
 		}
 	}()
 	for ws.Next() {
-		fmt.Printf("Message sent from server: %s\n", ws.Payload())
+		payload, _ := ws.Message()
+		fmt.Printf("Message sent from server: %s\n", payload)
 	}
 	if err := ws.Err(); err != nil {
 		fmt.Println(err)

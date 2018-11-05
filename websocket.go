@@ -72,7 +72,7 @@ func (ws *WebSocket) Close() error {
 	if ws.cc == 0 {
 		ws.cc = 1000
 	}
-	ws.SetWriteOpcode(opcodeClose)
+	ws.SetOpcode(opcodeClose)
 	binary.Write(ws, binary.BigEndian, ws.cc)
 
 	var err error
@@ -83,8 +83,9 @@ func (ws *WebSocket) Close() error {
 	return err
 }
 
-func (ws *WebSocket) CloseCode() uint16 { return ws.cc }
-func (ws *WebSocket) Err() error        { return ws.err }
+func (ws *WebSocket) CloseCode() uint16        { return ws.cc }
+func (ws *WebSocket) Err() error               { return ws.err }
+func (ws *WebSocket) Message() ([]byte, uint8) { return ws.payload, ws.opcode }
 
 func (ws *WebSocket) Next() bool {
 	for {
@@ -137,8 +138,6 @@ func (ws *WebSocket) Next() bool {
 	}
 }
 
-func (ws *WebSocket) Opcode() uint8              { return ws.opcode }
-func (ws *WebSocket) Payload() []byte            { return ws.payload }
 func (ws *WebSocket) Read(b []byte) (int, error) { return copy(b, ws.payload), nil }
 
 func (ws *WebSocket) SetCloseCode(cc uint16) error {
@@ -149,10 +148,10 @@ func (ws *WebSocket) SetCloseCode(cc uint16) error {
 	return nil
 }
 
-func (ws *WebSocket) SetWriteOpcode(opcode uint8) { ws.writer.opcode = opcode }
+func (ws *WebSocket) SetOpcode(opcode uint8) { ws.writer.opcode = opcode }
 
 func (ws *WebSocket) handlePing(b []byte) {
-	ws.SetWriteOpcode(opcodePong)
+	ws.SetOpcode(opcodePong)
 	ws.Write(b)
 }
 
