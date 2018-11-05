@@ -104,7 +104,6 @@ func (ws *WebSocket) Next() bool {
 		case f.opcode == opcodePong: // no-op
 		case f.opcode == opcodeClose:
 			defer ws.Close()
-			ws.cc = 1000
 			ws.resolveState()
 			if f.hasCloseCode && !validCloseCode(f.cc) {
 				ws.cc = 1002
@@ -118,6 +117,7 @@ func (ws *WebSocket) Next() bool {
 			}
 			ws.opcode = f.opcode
 			ws.payload = f.payload
+			ws.cc = f.cc
 			return false
 		default:
 			ws.fb.add(f)
