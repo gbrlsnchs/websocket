@@ -27,13 +27,13 @@ var (
 
 func Handshake(w http.ResponseWriter, r *http.Request) (net.Conn, error) {
 	if r.Host == "" {
-		status := http.StatusBadRequest
-		http.Error(w, http.StatusText(status), status)
+		w.WriteHeader(http.StatusBadRequest)
 		return nil, ErrMissingHost
 	}
 
 	var err error
 	if err = validateClientHeaders(r.Header); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		return nil, err
 	}
 
@@ -42,23 +42,25 @@ func Handshake(w http.ResponseWriter, r *http.Request) (net.Conn, error) {
 	hdr.Set("Connection", "Upgrade")
 	key, err := ConcatKey(r.Header.Get("Sec-WebSocket-Key"))
 	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		return nil, err
 	}
 	hdr.Set("Sec-WebSocket-Accept", base64.StdEncoding.EncodeToString(key))
-	w.WriteHeader(http.StatusSwitchingProtocols)
 
 	// Hijack the underlying connection.
 	if hj, ok := w.(http.Hijacker); ok {
+		w.WriteHeader(http.StatusSwitchingProtocols)
 		conn, bufrw, err := hj.Hijack()
 		if err != nil {
 			return nil, err
 		}
 		if err = bufrw.Flush(); err != nil {
-			defer conn.Close()
+			conn.Close()
 			return nil, err
 		}
 		return conn, nil
 	}
+	w.WriteHeader(http.StatusBadRequest)
 	return nil, errors.New("websocket: connection not hijackable")
 }
 

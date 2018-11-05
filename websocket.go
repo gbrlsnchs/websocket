@@ -60,8 +60,6 @@ func newWS(conn net.Conn, client bool) *WebSocket {
 func UpgradeHTTP(w http.ResponseWriter, r *http.Request) (*WebSocket, error) {
 	conn, err := internal.Handshake(w, r)
 	if err != nil {
-		status := http.StatusBadRequest
-		http.Error(w, http.StatusText(status), status)
 		return nil, err
 	}
 	return newWS(conn, false), nil
