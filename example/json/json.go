@@ -21,15 +21,15 @@ func main() {
 			fmt.Println(err)
 			return
 		}
-		dec := json.NewDecoder(ws)
-		enc := json.NewEncoder(ws)
+		rr, ww := ws.NewReader(), ws.NewWriter()
+		dec, enc := json.NewDecoder(rr), json.NewEncoder(ww)
 		var t test
 
 		for ws.Next() {
 			if err = dec.Decode(&t); err != nil {
 				fmt.Println(err)
-				ws.Write([]byte(err.Error()))
-				ws.Close()
+				ww.Write([]byte(err.Error()))
+				ww.Close()
 				return
 			}
 			switch t.Msg {
@@ -42,8 +42,8 @@ func main() {
 			}
 			if err = enc.Encode(t); err != nil {
 				fmt.Println(err)
-				ws.Write([]byte(err.Error()))
-				ws.Close()
+				ww.Write([]byte(err.Error()))
+				ww.Close()
 				return
 			}
 		}

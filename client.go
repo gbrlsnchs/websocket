@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -70,7 +71,7 @@ func open(address string, timeout time.Duration, config *tls.Config) (*WebSocket
 	r.Header.Set("Sec-WebSocket-Key", encKey)
 
 	d := &net.Dialer{Timeout: timeout}
-	var conn net.Conn
+	var conn io.ReadWriteCloser
 
 	if isWSS {
 		conn, err = tls.DialWithDialer(d, "tcp", uri.Host, config)
@@ -80,30 +81,34 @@ func open(address string, timeout time.Duration, config *tls.Config) (*WebSocket
 	if err != nil {
 		return nil, err
 	}
-	if err = sendReq(r, conn, encKey); err != nil {
+	rd, err := sendReq(r, conn, encKey)
+	if err != nil {
 		conn.Close()
 		return nil, err
 	}
-	return newWS(conn, true), nil
+	return newWS(rd, conn, true), nil
 }
 
-func sendReq(r *http.Request, conn net.Conn, encKey string) error {
+func sendReq(r *http.Request, conn io.ReadWriter, encKey string) (*bufio.Reader, error) {
 	b, err := httputil.DumpRequestOut(r, true)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if _, err = conn.Write(b); err != nil {
-		return err
+		return nil, err
 	}
-	rd := bufio.NewReader(conn)
+	rd := bufio.NewReaderSize(conn, defaultRWSize)
 	rr, err := http.ReadResponse(rd, r)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if rr.StatusCode != http.StatusSwitchingProtocols {
-		return errors.New("websocket: client did not receive 101 status response")
+		return nil, errors.New("websocket: client did not receive 101 status response")
 	}
-	return validateServerHeaders(rr.Header, encKey)
+	if err = validateServerHeaders(rr.Header, encKey); err != nil {
+		return nil, err
+	}
+	return rd, nil
 }
 
 func validateServerHeaders(hdr http.Header, encKey string) error {

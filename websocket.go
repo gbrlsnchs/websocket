@@ -2,10 +2,8 @@ package websocket
 
 import (
 	"bufio"
-	"encoding/binary"
 	"errors"
 	"io"
-	"net"
 	"net/http"
 	"unicode/utf8"
 
@@ -19,40 +17,32 @@ var (
 
 const defaultRWSize = 4096
 const (
-	stateOpen = iota
-	stateClosing
-	stateClosed
+	leftBit    = 0x80
+	rsv1Bit    = 0x40
+	rsv2Bit    = 0x20
+	rsv3Bit    = 0x10
+	opcodeBits = 0xF
+	lengthBits = 0x7F
 )
 
 // WebSocket is a websocket instance that may be
 // either a client or a server depending on how it is created.
 type WebSocket struct {
-	*writer
+	rbuf *bufio.Reader
+	wbuf *bufio.Writer
+	conn io.ReadWriteCloser
 
-	fb   *frameBuffer
-	conn io.Closer
-
-	state int
-	cc    uint16
-
-	opcode  uint8
-	payload []byte
+	payload []byte // close payload
+	cc      CloseCode
+	client  bool
 	err     error
 }
 
-func newWS(conn net.Conn, client bool) *WebSocket {
+func newWS(rbuf *bufio.Reader, conn io.ReadWriteCloser, client bool) *WebSocket {
 	return &WebSocket{
-		fb: &frameBuffer{
-			rd:     bufio.NewReaderSize(conn, defaultRWSize),
-			first:  true,
-			client: client,
-		},
-		writer: &writer{
-			wr:     bufio.NewWriterSize(conn, defaultRWSize),
-			opcode: OpcodeText,
-			client: client,
-		},
-		conn: conn,
+		rbuf:   rbuf,
+		conn:   conn,
+		client: client,
 	}
 }
 
@@ -62,102 +52,90 @@ func UpgradeHTTP(w http.ResponseWriter, r *http.Request) (*WebSocket, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newWS(conn, false), nil
+	rbuf := bufio.NewReaderSize(conn, defaultRWSize)
+	return newWS(rbuf, conn, false), nil
 }
 
-// Close closes the connection manually by sending the close code 1000.
-func (ws *WebSocket) Close() error {
-	if ws.cc == 0 {
-		ws.cc = 1000
-	}
-	ws.SetOpcode(opcodeClose)
-	binary.Write(ws, binary.BigEndian, ws.cc)
-
-	var err error
-	if ws.state >= stateClosing {
-		err = ws.conn.Close()
-	}
-	ws.resolveState()
-	return err
+func (ws *WebSocket) CloseCode() CloseCode {
+	return ws.cc
 }
 
-func (ws *WebSocket) CloseCode() uint16        { return ws.cc }
-func (ws *WebSocket) Err() error               { return ws.err }
-func (ws *WebSocket) Message() ([]byte, uint8) { return ws.payload, ws.opcode }
+func (ws *WebSocket) Err() error {
+	return ws.err
+}
 
-func (ws *WebSocket) Next() bool {
+func (ws *WebSocket) NewReader() *Reader {
+	return &Reader{
+		buf:    ws.rbuf,
+		first:  true,
+		client: ws.client,
+	}
+}
+
+func (ws *WebSocket) NewWriter() *Writer {
+	if ws.wbuf == nil {
+		ws.wbuf = bufio.NewWriterSize(ws.conn, defaultRWSize)
+	}
+	return &Writer{
+		conn:   ws.conn,
+		opcode: OpcodeText,
+		buf:    ws.wbuf,
+		client: ws.client,
+	}
+}
+
+func (ws *WebSocket) Next(rd *Reader, wr *Writer) bool {
 	for {
-		f, err := ws.fb.next()
-		if err != nil {
-			ws.state = stateClosed
-			if err == io.EOF {
-				return false
-			}
-			ws.conn.Close()
-			ws.err = err
-			return false
-		}
-
-		switch {
-		case f.opcode == opcodePing:
-			ws.handlePing(f.payload)
-		case f.opcode == opcodePong: // no-op
-		case f.opcode == opcodeClose:
-			defer ws.Close()
-			ws.resolveState()
-			if f.hasCloseCode && !validCloseCode(f.cc) {
-				ws.cc = 1002
-				ws.err = errInvalidCloseCode
-				return false
-			}
-			if !utf8.Valid(f.payload) {
-				ws.cc = 1002
-				ws.err = errInvalidClosePayload
-				return false
-			}
-			ws.opcode = f.opcode
-			ws.payload = f.payload
-			ws.cc = f.cc
-			return false
+		switch rd.step {
+		case stepInfo:
+			ws.err = rd.nextStep(rd.readInfo)
+		case stepMask:
+			ws.err = rd.nextStep(rd.readMask)
+		case stepPayload:
+			ws.err = rd.nextStep(rd.readPayload)
 		default:
-			ws.fb.add(f)
-			if f.final {
-				defer ws.fb.reset()
-				if ws.fb.opcode == OpcodeText && !utf8.Valid(ws.fb.payload) {
-					ws.conn.Close()
-					ws.err = errInvalidUTF8
+			rd.step = stepInfo
+
+			if rd.frame.isControl() {
+				switch rd.frame.opcode {
+				case opcodeClose:
+					wr.resolveState()
+					wr.opcode = opcodeClose
+					wr.Close()
+					ws.cc = rd.frame.cc
+					if wr.state != stateClosed {
+						if ws.cc > 0 && !utf8.Valid(rd.frame.payload) {
+							ws.err = errInvalidUTF8
+							wr.Close()
+							return false
+						}
+						ws.payload = rd.frame.payload
+						return true
+					}
 					return false
+				case opcodePing:
+					wr.opcode = opcodePong
+					wr.Write(rd.frame.payload)
+				case opcodePong: // no-op
 				}
-				ws.opcode = ws.fb.opcode
-				ws.payload = ws.fb.payload
-				return true
+				continue
 			}
+			b := make([]byte, len(rd.message)+len(rd.frame.payload))
+			n := copy(b, rd.message)
+			copy(b[n:], rd.frame.payload)
+			rd.message = b
+			if !rd.frame.fin {
+				continue
+			}
+			if wr.opcode == OpcodeText && !utf8.Valid(rd.frame.payload) {
+				ws.err = errInvalidUTF8
+				wr.Close()
+				return false
+			}
+			return true
 		}
-	}
-}
-
-func (ws *WebSocket) Read(b []byte) (int, error) { return copy(b, ws.payload), nil }
-
-func (ws *WebSocket) SetCloseCode(cc uint16) error {
-	if !validCloseCode(cc) {
-		return errInvalidCloseCode
-	}
-	ws.cc = cc
-	return nil
-}
-
-func (ws *WebSocket) SetOpcode(opcode uint8) { ws.writer.opcode = opcode }
-
-func (ws *WebSocket) handlePing(b []byte) {
-	ws.SetOpcode(opcodePong)
-	ws.Write(b)
-}
-
-func (ws *WebSocket) resolveState() {
-	switch ws.state {
-	case stateOpen:
-		ws.state = stateClosing
-	case stateClosing:
-		ws.state = stateClosed
+		if ws.err != nil {
+			return false
+		}
 	}
 }
